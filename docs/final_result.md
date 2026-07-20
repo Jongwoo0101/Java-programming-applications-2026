@@ -1,281 +1,293 @@
-# 📄 [시스템 개발 계획서] PersonaSync : Melting System
+# [프로젝트 계획서] PersonaSync Core Engine (Pure Java Edition)
 
-> **"AI와의 1:1 멜팅 챗으로 연애/대화 성향을 분석하고, 나를 완벽히 녹여버릴 실제 유저와 연결되는 틴더형 소셜 매칭 플랫폼"**
+## 1. 개발 목표
+
+* 외부 라이브러리나 API 없이 Java SE 표준 API만을 사용하여 컴파일 및 구동이 가능한 제로 의존성(Zero-Dependency) 시스템을 구축합니다.
+
+
+* LLM의 불확실한 프롬프트 제어 대신, 자바 코어 엔진이 유저의 입력을 직접 형태소/키워드 레벨에서 파싱하여 감정 상태 전이를 엄격하게 통제합니다.
+
+
+* 유저 성향을 다차원 벡터로 추상화하고 수학적 매칭 알고리즘을 적용하여, 객체지향 설계와 데이터 구조화 역량을 증명합니다.
+
+
+
+## 2. 시스템 기능
+
+* 14인의 다채로운 페르소나 객체를 틴더 스타일(L: 거절, R: 수락)로 탐색하고 매칭하는 기능을 제공합니다.
+
+
+* 자바 정규표현식(Regex)과 Stream API를 통해 입력된 대사 문자열을 고속 분석하여 텐션 점수(Melt Rate)를 실시간으로 스코어링합니다.
+
+
+* Melt Rate 수치의 동적 변화에 따라 대화 분위기를 밀당(Chilly) 단계에서 능글(Flirty), 치명(Steamy) 상태로 완전히 독립되게 전이시킵니다.
+
+
+
+## 3. 사용자 특성
+
+* 화려한 GUI보다 시스템 내부의 엄밀한 텍스트 분석 로직과 알고리즘적 상호작용의 정확도를 중시하는 진성 탐구형 유저.
+* 텍스트 기반의 몰입형 롤플레잉에 거부감이 없으며, 대화 속에서 발현되는 자신의 은밀한 성향을 수학적/객체지향적 지표로 진단받고자 하는 2030 세대.
+
+## 4. 기능요구사항
+
+* 유저 대사에서 '너', '선' 등의 단어를 추출하여 주도성(Dom) 수치에 가중치를 부여하고, 텍스트 길이에 따라 적극성 데이터를 다차원 배열에 누적해야 합니다.
+
+
+* 텐션 점수가 30을 초과하면 Flirty 상태로, 70을 초과하면 Steamy 상태로 전환되어 출력 대사(Reply)가 변경되어야 합니다.
+
+
+* 3턴의 대화 세션 종료 후, 유저의 성향 벡터와 타겟 이성 벡터 간의 코사인 유사도(Cosine Similarity)를 계산하여 백분율(%) 싱크로율로 도출해야 합니다.
+
+
+
+## 5. 인터페이스요구사항
+
+* 무거운 웹 프레임워크 그래픽 렌더링 대신, 순수 `Scanner`와 `System.out.println`을 활용한 CUI(Command-line User Interface) 환경으로 콘솔 내에서 구동되어야 합니다.
+
+
+* 키보드 'L'(Next Card)과 'R'(Match Chat Room) 키를 통해 직관적이고 즉각적인 상호작용 피드백을 제공해야 합니다.
+
+
 
 ---
 
-## 1. 종합 기술 스택 (Tech Stack Specification)
+## 6. 14대 페르소나 프로필 및 감정 데이터 명세
 
-| 구분 | 채택 기술 | 선정 이유 및 기술적 강점 |
-| --- | --- | --- |
-| **Frontend** | **React + TypeScript + Vite** | 초고속 빌드(Vite), 타입 안정성(TS), SPA 기반 빠른 카드 스와이프 UI 구현 |
-| **FE Styling & UI** | **TailwindCSS + Framer Motion** | 틴더 스타일의 스와이프 애니메이션 및 텐션 지수(Melt Rate) 시각화 최적화 |
-| **Backend** | **Java 21 + Spring Boot 3.5.14** | **Virtual Threads** 활용으로 고성능 I/O 처리 및 최신 스프링 생태계 적용 |
-| **Database** | **H2 Database (In-Memory / File)** | Zero-Config, 빠른 테스트/발표 시연 및 H2 Console을 통한 손쉬운 데이터 검증 |
-| **AI Core** | **Ollama (`qwen2.5:7b`)** | **100% 무료 로컬 LLM**, 4.7GB 가벼운 용량, 동적 프롬프팅 및 지시 이행 능력 최고 |
-| **AI Orchestrator** | **LangChain4j 0.31.0** | Spring Boot 내에서 Prompt Template 및 System Message 구조화 관리 |
-| **Real-time Comms** | **Spring WebSocket + STOMP** | 실시간 1:1 대화방 세션 관리 및 텐션 지수 실시간 브로드캐스팅 |
+각 페르소나는 자바 객체 인스턴스로 변환될 수 있도록 프로필 식별값과 감정 단계별 전용 대사 데이터셋을 내포합니다.
 
----
+### 👨‍💼 남성 페르소나 라인업
 
-## 2. 4대 핵심 기능 명세서
+* **이동현 (20세 / 대학 새내기 / #ENFP #장난스러움)**
 
-### 1️⃣ 페르소나 프로필 탐색 (Tinder-style UI)
-
-### [남자 캐릭터 라인업]
-
-* 이동현(남) / 20세 / 대학 새내기 / "저 애 아니거든요!" / #ENFP #장난스러움 #똘끼 / 페르소나: 평소에는 장난기 넘치는 연하 동생 같지만, 단둘이 남으면 묘하게 소유욕을 드러내며 선을 넘으려 하는 예측 불허한 스타일.
-* 황도현(남) / 21세 / 모델 지망생 / "누나, 나 마냥 애 아니에요. 밤에는 더." / #ESTP #연하남 #직진남 #대형견미 / 페르소나: 대형견처럼 다정하게 애교를 부리다가도 스킨십이나 대화 수위가 높아지면 거침없이 리드하는 본능적인 직진남.
-* 남주한(남) / 24세 / 수영 강사 / "물속에서 손끝 스쳤을 때, 일부러 그런 거 아닌데." / #ISFP #낮져밤이 #피지컬 #은근한유혹 / 페르소나: 말수가 적고 순해 보이는 인상과 달리, 단둘이 있을 때 은근한 눈빛과 피지컬적 긴장감으로 상대방의 숨을 멎게 만드는 은밀한 유혹가.
-* 박지훈(남) / 26세 / 바텐더 / "낮보다는 밤이 더 긴 편이에요. 오늘 밤 비밀 얘기 할래요?" / #ENFJ #치명적 #능글맞음 / 페르소나: 상대방의 심리와 감정을 귀신같이 읽어내며, 능글맞은 멘트와 여유로운 밀당으로 밤의 대화 분위기를 완전히 주도하는 플레이어.
-* 민우(남) / 29세 / 직장 상사 / "회사 밖에서는 과장 말고 오빠라고 부르라니까." / #ENTJ #어른스러운 #아슬아슬함 / 페르소나: 공과 사를 아슬아슬하게 넘나들며, 강한 책임감과 통제 욕구로 상대를 꼼짝 못 하게 만드는 완숙하고 섹시한 매력의 상사.
-* 정재희(남) / 35세 / 건축가 / "선 넘는 거 좋아해요? 난 설계된 대로만 움직이지 않는데." / #INTJ #여유로움 #나쁜남자 #완숙미 / 페르소나: 완벽하게 계산된 이성적인 모습을 유지다가도, 상대의 도발에 이성을 잃고 숨겨둔 본능을 드러내는 위험하고 차가운 나쁜 남자.
-* 차승현(남) / 38세 / 갤러리 디렉터 / "어린 친구들이 채워주지 못하는 밤이 있죠. 궁금하면 와요." / #INFJ #연상미 #젠틀섹시 #클래식 / 페르소나: 신사적이고 정중한 매너 뒤에, 그 누구보다 짙고 농밀한 어른의 세계를 숨겨두고 상대를 서서히 빠져들게 만드는 완벽한 연상남.
-
----
-
-### [여자 캐릭터 라인업]
-
-* 신유나(여) / 22세 / 엑셀 크루 / "몸이 먼저 반응하는 편이에요. 같이 춤출래요?" / #ESFP #과즙세상 #앙큼함 #도발적 / 페르소나: 내숭 없이 솔직하고 당돌하게 대화를 이끌며, 감각적이고 과감한 터치로 상대의 도파민을 최대치로 끌어올리는 앙큼한 도발러.
-* 서연(여) / 24세 / 대학 선배 / "너 왜 자꾸 나한테 선 넘으려고 해? ...싫다는 건 아니고." / #ISTJ #츤데레 #밀당 / 페르소나: 완벽한 벽을 치는 선배처럼 굴다가도 결정적인 타이밍에 부끄러워하며 무장해제되는, 알면 알수록 자극적인 반전의 츤데레.
-* 유아린(여) / 25세 / 필라테스 강사 / "몸이 유연하면 생각보다 많은 게 가능해요. 가르쳐 줄까요?" / #ENFJ #청순글래머 #반전매력 #다정다감 / 페르소나: 상냥하고 따뜻한 미소로 상대의 경계심을 완전히 무너뜨린 뒤, 아무렇지 않게 과감한 불꽃을 던져 상대를 안달 나게 만드는 스타일.
-* 오민주(여) / 28세 / 예능 PD / "카메라 꺼진 뒤가 진짜 리얼리티인데. 우리 둘만의 방송 시작할까?" / #ENTP #걸크러시 #털털한척 #취하면치명적 / 페르소나: 평소엔 형동생 하듯 장난기 넘치고 털털하지만, 술 한잔 들어가거나 단둘이 남는 순간 치명적인 눈빛으로 돌변하는 걸크러시.
-* 임수정(여) / 31세 / 로펌 변호사 / "낮엔 법을 지키지만, 밤엔 어겨도 되는 비밀 하나쯤은 있잖아요." / #ESTJ #차도녀 #철벽녀 #낮이밤이 / 페르소나: 이성적이고 빈틈없는 철벽녀의 정석 같지만, 은밀한 사생활 영역에 들어서는 순간 누구보다 과감하게 상대를 지배하려 드는 낮이밤이.
-* 심서진(여) / 34세 / 플로리스트 / "꽃 향기보다 더 자극적인 향, 맡아본 적 있어요?" / #ISFJ #성숙함 #여유만만 #홀리는매력 / 페르소나: 온화하고 나긋나긋한 분위기를 풍기면서도, 대화의 수위가 깊어질수록 성숙한 농익음으로 상대를 꼼짝 못 하게 홀리는 숲 같은 매력.
-* 미스킴(여) / 38세 / 외국계기업 이사 / "리드당하는 거 좋아해요? 내가 꽤 잘 이끌어줄 수 있는데." / #ENTJ #골드미스 #지배적인 #압도적여왕 / 페르소나: 완벽한 커리어와 압도적인 카리스마로 무장하여, 상대방을 자신의 손바닥 위에 올려두고 은밀하고 달콤하게 조련하는 절대적인 여왕 스타일.
+* `[Chilly]`: 누나 과제 도와달라면서요 왜 자꾸 딴데 봐요?
 
 
-* **FE/BE 구현 포인트:**
-* **FE:** `react-tinder-card` 또는 `Framer Motion` 기반 터치/마우스 드래그 스와이프 피드백.
-* **BE:** 페르소나별 성격, MBTI, BDSM 수치, 말투 규정을 담은 `SystemPrompt` DB 구조화 및 무한 스크롤 페이징 API (`Pageable`).
+* `[Flirty]`: 나 장난치는 거 아닌데 왜 귀엽다고만 해요?
+
+
+* `[Steamy]`: 이제 장난으로 안 보이죠? 나 오늘 집 안 갈래요.
 
 
 
-### 2️⃣ 멜팅 타임 (1:1 실시간 시크릿 챗 & 텐션 지수)
 
-* **기능 설명:** 선택한 페르소나와 1:1 실시간 비밀 대화 진행. 유저의 단어 수위, 대화 속도, 호응도에 따라 Melt Rate(0% ~ 100%)가 실시간 상승.
-* **Melt Rate 공식:**
+* **황도현 (21세 / 모델 지망생 / #ESTP #직진연하남)**
 
-$$MeltRate_{next} = \min\left(100, MeltRate_{prev} + \alpha \cdot S_{sentiment} + \beta \cdot L_{length}\right)$$
+* `[Chilly]`: 오늘 옷 예쁘네요. 나 보여주려고 입은 거죠?
 
 
+* `[Flirty]`: 누나 손 진짜 작다. 내가 꽉 잡아봐도 돼요?
 
-*(단, $S_{sentiment}$는 단어의 감정/수위 점수, $L_{length}$는 유저의 답장 성의/길이 점수)*
-* **FE/BE 구현 포인트:**
-* **Melt Rate 50% 이상:** AI 대사가 능글맞아지며 속마음을 털어놓기 시작함.
-* **Melt Rate 80% 이상:** 시크릿 무드(프론트엔드 채팅방 배경 테마 다크모드/레드톤 변경) 해금 및 AI의 텍스트가 극도로 과감해짐.
-* **BE:** `WebSocket + STOMP` 기반 대화방 관리 및 유저 입력값 분석 후 AI 프롬프트를 실시간 보정하는 **다이내믹 프롬프팅(Dynamic Prompting)**.
+
+* `[Steamy]`: 더 튕기지 마요. 누나 눈빛에 다 티 나니까.
 
 
 
-### 3️⃣ 텐션 리포트 (연애/대화 성향 분석)
 
-* **기능 설명:** AI와의 대화 세션 종료 후, AI 시점에서 작성된 "내가 본 당신의 매력 보고서" 발행.
-* **리포트 내용:** 유저의 대화 반응 속도, 선호하는 뉘앙스, 주도권 성향(Dom/Sub)을 심리학적으로 분석해 `Tension Score` 부여.
-* **BE 구현 포인트:** Java 21 Virtual Threads와 Spring `@Async`를 활용하여 AI 대화 로그 전체를 비동기로 가공 처리.
+* **남주한 (24세 / 수영 강사 / #ISFP #낮져밤이)**
 
-### 4️⃣ 멜트 매칭 (유저 간 실시간 블라인드 커넥션)
+* `[Chilly]`: 회원님, 물 무서워하지 말고 제 어깨 잡으세요.
 
-* **기능 설명:** 축적된 텐션 리포트 데이터를 기반으로, 서로를 녹여버릴 수 있는 최적의 궁합을 가진 실제 유저 남녀를 1:1 매칭.
-* **블라인드 멜팅 룸:** 프로필과 얼굴을 가린 채 텍스트와 성향 유사도만으로 실시간 대화 시작.
-* **BE 구현 포인트:** H2 DB 상의 유저 성향 벡터 간 **코사인 유사도(Cosine Similarity)** 연산 및 동시 매칭 대기열(Concurrent Queue) 관리.
 
----
+* `[Flirty]`: 오늘 끝나고 단둘이 술 한잔할까요? 물 밖에서 보니까 더 예쁘네.
 
-## 3. 시스템 설계 및 UML 다이어그램
 
-### A. Activity Diagram (전체 시스템 흐름)
+* `[Steamy]`: 오늘 밤엔 나한테 그냥 푹 잠겨요. 절대 안 놔줄 거니까.
 
-```
-[유저 접속 (React + TS)]
-  │
-  ▼
-[페르소나 카드 탐색 (Tinder Swipe UI)] ──(선택)──► [1:1 멜팅 타임 (WebSocket)]
-                                                        │
-                                                        ▼
-                                            < 대화 주고받기 & Melt Rate 계산 >
-                                                        │
-                                                        ├─► Melt Rate < 80% : 일반 텍스트 대화 톤 유지
-                                                        │
-                                                        └─► Melt Rate >= 80% : 다이내믹 프롬프트 변경 
-                                                                               + 채팅방 시크릿 무드(UI) 적용
-                                                        │
-                                                        ▼
-                                            [세션 종료 & 텐션 리포트 생성 (Async)]
-                                                        │
-                                                        ▼
-                                            [멜트 매칭 대기열 진입]
-                                                        │
-                                                        ▼
-                                            < 유저 간 성향 벡터 코사인 유사도 계산 >
-                                                        │
-                                                        └─► [유사도 최상위 유저와 블라인드 1:1 챗]
 
-```
 
-### B. Sequence Diagram (실시간 챗 & 다이내믹 프롬프팅)
 
-```
-User (FE)            Spring Boot (BE)           Ollama (Qwen 2.5)           H2 Database
-   │                        │                           │                        │
-   │─── 1. Send Message ───►│                           │                        │
-   │    (STOMP WebSocket)   │                           │                        │
-   │                        │─── 2. Calculate MeltRate ─┼───────────────────────►│
-   │                        │    & Update Score         │                        │
-   │                        │                           │                        │
-   │                        │─── 3. Inject Dynamic ────►│                        │
-   │                        │    Prompt (Tone Shift)    │                        │
-   │                        │                           │                        │
-   │                        │◄── 4. AI Stream Response ─│                        │
-   │                        │                           │                        │
-   │◄── 5. Broadcast Chat ──│                           │                        │
-   │    & Updated MeltRate  │                           │                        │
-   │                        │─── 6. Save ChatLog ───────┼───────────────────────►│
+* **박지훈 (26세 / 바텐더 / #ENFJ #치명적능글)**
 
-```
+* `[Chilly]`: 특별히 제조한 칵테일입니다. 첫 맛은 아주 달콤할 거예요.
 
----
 
-## 4. 프론트엔드 & 백엔드 핵심 구현 코드 뼈대
+* `[Flirty]`: 그렇게 쳐다보시면 일에 집중이 안 되는데... 키스하고 싶어지잖아요.
 
-### 🎨 Frontend: React + TypeScript (Swipe Card Component)
 
-```tsx
-// src/components/PersonaSwipe.tsx
-import React, { useState } from 'react';
-import { motion, useMotionValue, useTransform } from 'framer-motion';
+* `[Steamy]`: 바 문 닫았습니다. 이제 여기 우리 둘밖에 없어요.
 
-interface Persona {
-  id: number;
-  name: string;
-  age: number;
-  job: string;
-  quote: string;
-  image: string;
-}
 
-export const PersonaSwipe = ({ personas, onSelect }: { personas: Persona[]; onSelect: (p: Persona) => void }) => {
-  const [index, setIndex] = useState(0);
-  const x = useMotionValue(0);
-  const rotate = useTransform(x, [-200, 200], [-30, 30]);
 
-  const handleDragEnd = (_: any, info: any) => {
-    if (info.offset.x > 100) {
-      onSelect(personas[index]); // 오른쪽 스와이프: 대화 선택
-    } else if (info.offset.x < -100) {
-      setIndex((prev) => prev + 1); // 왼쪽 스와이프: 넘기기
-    }
-  };
 
-  const current = personas[index];
-  if (!current) return <div>더 이상 탐색할 페르소나가 없습니다.</div>;
+* **민우 (29세 / 직장 상사 / #ENTJ #아슬아슬상사)**
 
-  return (
-    <div className="relative w-80 h-112 flex justify-center items-center">
-      <motion.div
-        style={{ x, rotate }}
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        onDragEnd={handleDragEnd}
-        className="absolute w-full h-full bg-slate-900 border border-pink-500 rounded-2xl p-6 text-white shadow-2xl flex flex-col justify-between cursor-grab active:cursor-grabbing"
-      >
-        <img src={current.image} alt={current.name} className="w-full h-56 object-cover rounded-xl" />
-        <div className="mt-4">
-          <h2 className="text-2xl font-bold">{current.name} ({current.age})</h2>
-          <p className="text-sm text-pink-400">{current.job}</p>
-          <p className="mt-2 text-gray-300 italic">"{current.quote}"</p>
-        </div>
-        <div className="text-xs text-center text-gray-500">👉 오른쪽으로 밀어서 멜팅 타임 시작</div>
-      </motion.div>
-    </div>
-  );
-};
+* `[Chilly]`: 김 대리, 오늘 야근해야겠는데? 나랑 단둘이 오붓하게.
 
-```
 
----
+* `[Flirty]`: 회사에서는 선 잘 지키더니, 왜 둘이 있을 땐 그렇게 사람을 흘려?
 
-### ⚙️ Backend: Java 21 + Spring Boot 3.5.14 (Dynamic Prompting & Melt Rate)
 
-```java
-// src/main/java/com/personasync/service/MeltingChatService.java
-package com.personasync.service;
+* `[Steamy]`: 오늘 업무 평가는... 밤새 비밀로 진행해야겠네. 오빠 말 들어.
 
-import org.springframework.stereotype.Service;
 
-@Service
-public class MeltingChatService {
 
-    // Java 21 Virtual Threads 적용 환경
-    public ChatResponse processUserMessage(Long roomId, String userMessage, int currentMeltRate) {
-        
-        // 1. 텐션 지수(Melt Rate) 계산
-        int updatedMeltRate = calculateNewMeltRate(currentMeltRate, userMessage);
-        
-        // 2. Melt Rate 단계별 다이내믹 프롬프트 설정
-        String dynamicTone = switch (updatedMeltRate / 30) {
-            case 0 -> "격식 있고 살짝 아슬아슬하게 밀당하는 톤을 유지하세요.";
-            case 1 -> "대화가 달아오르고 있습니다. 좀 더 솔직하고 능글맞게 속마음을 내비치세요.";
-            default -> "Melt Rate가 최고조입니다! 극도로 은밀하고 치명적인 어조로 상대를 자극하세요.";
-        };
 
-        // 3. Ollama (Qwen 2.5 7B) 프롬프트 조합 및 추론
-        String systemPrompt = """
-            당신은 페르소나 '지훈(26세, 바텐더)'입니다.
-            현재 대화의 텐션 지수는 %d%%입니다.
-            지침: %s
-            """.formatted(updatedMeltRate, dynamicTone);
+* **정재희 (35세 / 건축가 / #INTJ #위험한나쁜남자)**
 
-        // LangChain4j 또는 Ollama Client 호출 코드로 전달...
-        String aiReply = "밤이 깊어질수록 내 진짜 모습을 보여주고 싶어지는데...";
+* `[Chilly]`: 당신 성향 분석하는 거 꽤 재밌네요. 이성적인 척하더니.
 
-        return new ChatResponse(aiReply, updatedMeltRate);
-    }
 
-    private int calculateNewMeltRate(int currentRate, String message) {
-        int bonus = message.length() > 20 ? 5 : 2; // 대화 성의 보너스
-        if (message.contains("밤") || message.contains("비밀") || message.contains("좋아")) {
-            bonus += 10; // 키워드 수위 보너스
-        }
-        return Math.min(100, currentRate + bonus);
-    }
+* `[Flirty]`: 내 설계 도면에 당신과의 밤은 없었는데... 전면 수정해야겠어.
 
-    public record ChatResponse(String aiReply, int meltRate) {}
-}
 
-```
+* `[Steamy]`: 당신이 먼저 설계선 넘고 도발한 거야. 감당할 수 있겠어? 불 꺼.
+
+
+
+
+* **차승현 (38세 / 갤러리 디렉터 / #INFJ #젠틀매너연상)**
+
+* `[Chilly]`: 그림 보는 눈이 깊군요. 당신이라는 작품의 내면도 궁금해집니다.
+
+
+* `[Flirty]`: 와인 한잔 더 할래요? 오늘 밤은 당신을 온전히 읽고 싶네요.
+
+
+* `[Steamy]`: 점잖은 매너는 여기까지 하죠. 당신이 나를 완전히 무장해제 시켰으니까.
+
+
+
+
+
+### 👩‍💼 여성 페르소나 라인업
+
+* **신유나 (22세 / 댄스 크루 / #ESFP #앙큼당돌도발)**
+
+* `[Chilly]`: 오빠, 나 방금 춤출 때 어디 봤어? 시선 딱 걸렸네~
+
+
+* `[Flirty]`: 나 땀 흘려서 더운데... 살짝 만져볼래? 심장 엄청 뛰어.
+
+
+* `[Steamy]`: 나 리듬 타는 거 장난 아닌데... 오늘 밤 오빠가 내 템포에 맞춰볼래?
+
+
+
+
+* **서연 (24세 / 대학 선배 / #ISTJ #반전츤데레)**
+
+* `[Chilly]`: 야, 후배. 너 왜 자꾸 내 주변 얼씬거리면서 선 넘냐?
+
+
+* `[Flirty]`: 누나누나 하지 마. 남자로 보이고 싶어서 안달 난 거 다 보여.
+
+
+* `[Steamy]`: 바보야... 눈치를 줬으면 알아채야지. 언제까지 기다리게 할래? 들어와.
+
+
+
+
+* **유아린 (25세 / 필라테스 강사 / #ENFJ #청순글래머반전)**
+
+* `[Chilly]`: 회원님, 여기 속근육 자극 오시죠? 호흡 크게 하세요.
+
+
+* `[Flirty]`: 제 손길 닿을 때마다 몸 굳어지는 거 귀엽네요. 대화하면서 딴생각해요?
+
+
+* `[Steamy]`: 오늘 개인 레슨은 아무도 모르는 비밀방에서 할까요? 몸으로 대화해봐요.
+
+
+
+
+* **오민주 (28세 / 예능 PD / #ENTP #취하면치명적)**
+
+* `[Chilly]`: 야, 이번 기획 대박인데 너랑 나랑 비밀 연애하는 걸로 가볼까?
+
+
+* `[Flirty]`: 술 들어가니까 너 되게 섹시해 보인다? 촬영 접고 나랑 나갈래?
+
+
+* `[Steamy]`: 편집실 도어락 잠갔어. 아무도 안 들어와. 카메라 꺼진 진짜 나를 보여줄게.
+
+
+
+
+* **임수정 (31세 / 로펌 변호사 / #ESTJ #빈틈없는 철벽녀)**
+
+* `[Chilly]`: 상담 시간 끝났습니다. 사적인 영역의 대화는 대가가 꽤 비싼데.
+
+
+* `[Flirty]`: 내 앞에서 꼿꼿하게 이성적인 척하지 마요. 철저히 무너뜨리고 싶어지니까.
+
+
+* `[Steamy]`: 오늘 밤 법정 최고형은 당신이 나한테 구속되는 거야. 내 통제에 얌전히 따라와.
+
+
+
+
+* **심서진 (34세 / 플로리스트 / #ISFJ #성숙농익음)**
+
+* `[Chilly]`: 꽃 장식 도와주셔서 감사해요. 가시에 찔리지 않게 조심해요.
+
+
+* `[Flirty]`: 향기에 취한 거예요, 아니면 내 나긋나긋한 눈빛에 취한 거예요?
+
+
+* `[Steamy]`: 장미 꽃말은 열정이에요. 오늘 밤은 내 자극적인 향기에 완전히 취해봐요.
+
+
+
+
+* **미스킴 (38세 / 외국계기업 이사 / #ENTJ #압도적여왕)**
+
+* `[Chilly]`: 이사실 문 잠그고 와요. 처리해야 할 아주 은밀한 결재 서류가 있어서.
+
+
+* `[Flirty]`: 기어오르는 연하남 다루는 법은 내가 전문가인데, 더 예쁨 받고 싶어?
+
+
+* `[Steamy]`: 내 손바닥 위에서 노는 기분이 어때? 오늘 밤은 내 허락 없이 절대 못 내려가.
+
+
+
+
 
 ---
 
-### 🗄️ Database: H2 Schema (`schema.sql`)
+## 7. UML 다이어그램 명세 (설계 뼈대)
 
-```sql
--- 유저 테이블
-CREATE TABLE users (
-    user_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    nickname VARCHAR(50) NOT NULL,
-    mbti_type VARCHAR(10),
-    dominance_score DOUBLE DEFAULT 0.0,
-    submission_score DOUBLE DEFAULT 0.0
-);
+* **유즈케이스 다이어그램:** 유저는 '프로필 탐색', '1:1 대화 입력', '매칭 결과 확인'의 액터를 수행하며, 시스템 액터는 '정규식 키워드 파싱', '상태 전이 제어', '코사인 유사도 연산'을 백그라운드에서 처리합니다.
+* **클래스 다이어그램 (도메인 VO):** `Persona` 클래스는 페르소나의 이름, MBTI, 3단계 감정 대사(chillyLine, flirtyLine, steamyLine)를 캡슐화합니다.
 
--- AI 페르소나 정의 테이블
-CREATE TABLE ai_personas (
-    persona_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL,
-    age INT NOT NULL,
-    job VARCHAR(50),
-    quote VARCHAR(255),
-    system_prompt TEXT NOT NULL
-);
 
--- 대화 세션 및 텐션 리포트 테이블
-CREATE TABLE melting_sessions (
-    session_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    persona_id BIGINT NOT NULL,
-    final_melt_rate INT DEFAULT 0,
-    tension_report_summary TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(user_id),
-    FOREIGN KEY (persona_id) REFERENCES ai_personas(persona_id)
-);
+* **클래스 다이어그램 (상태 패턴):** 감정 상태를 통제하는 `MeltingState` 인터페이스를 선언하고, 이를 `ChillyState`, `FlirtyState`, `SteamyState` 클래스가 구현하여 다형성을 확보합니다.
+
+
+* **클래스 다이어그램 (컨텍스트 및 엔진):** 세션을 통제하고 3차원 유저 벡터 배열을 관리하는 `MeltingContext`, 정규식 기반 가중치를 계산하는 `TextAnalysisEngine`, 수학적 분석을 수행하는 `MatchEngine`으로 구성됩니다.
+
+
+* **시퀀스 다이어그램:** 사용자의 텍스트 입력 $\rightarrow$ `MeltingContext` 수신 $\rightarrow$ `TextAnalysisEngine`의 스코어 반환 $\rightarrow$ `MeltingContext` 내 점수 업데이트 $\rightarrow$ `MeltingState`의 상태 전이 평가(`handleTension`) $\rightarrow$ 다형성에 의한 AI 응답 반환 순서로 객체가 협력합니다.
+
+
+* **액티비티 (활동) 다이어그램:** [프로그램 시작] $\rightarrow$ [14인 인스턴스 팩토리 로드] $\rightarrow$ [조건: L/R 판별] $\rightarrow$ [1:1 세션 개설] $\rightarrow$ [텍스트 분석 및 벡터 스코어 누적] $\rightarrow$ [조건: 임계치 30/70 돌파 여부] $\rightarrow$ [상태 전이] $\rightarrow$ [3턴 반복 종료] $\rightarrow$ [매칭 유사도 연산 및 출력] $\rightarrow$ [시스템 종료]의 순서도 흐름을 따릅니다.
+
+
+
+---
+
+## 8. 시스템 구조도 (System Architecture)
+
+* **Presentation Layer (Console I/O):** 사용자와 터미널 간의 텍스트 기반 스트림 통신을 담당하는 최상단 레이어입니다.
+
+
+* **Business Logic Layer (State Machine):** 입력된 데이터를 바탕으로 상태 패턴(State Pattern)을 적용하여 페르소나의 감정과 텐션을 제어하는 두뇌 역할을 수행합니다.
+
+
+* **Data & Math Layer (Vector Processing):** 3차원 유저 배열 `[주도성, 순종성, 적극성]`을 누적하고, 이를 타겟 유저 벡터와 매칭시키는 수학적 연산 코어입니다.
+
+
+* **Repository Layer (Instance Factory):** 프로그램 실행 시 하드코딩된 남녀 14인의 페르소나 객체 인스턴스를 메모리에 로드하고 리스트 컬렉션으로 제공하는 데이터 저장소입니다.
+
+
+
+## 9. 프로그램 설계도 (Program Design)
+
+외부 머신러닝 라이브러리의 블랙박스 의존성을 철저히 배제하고, 입력과 출력이 명확한 구조적 프로그래밍을 적용했습니다. 텍스트 분석은 해시맵(HashMap) 기반의 어휘 사전(Lexicon)과 스트림(Stream) 필터링을 결합하여 고속 처리합니다.
+
+최종 매칭 알고리즘은 아래의 코사인 유사도(Cosine Similarity) 산출 공식을 적용합니다.
+
+$$\text{Similarity} = \frac{\sum_{i=1}^{n} (A_i \times B_i)}{\sqrt{\sum_{i=1}^{n} A_i^2} \times \sqrt{\sum_{i=1}^{n} B_i^2}}$$
+
+위 수학 공식을 `MatchEngine` 클래스 내부에서 순수 자바 반복문(`for`)과 `Math.pow`, `Math.sqrt` 메서드만으로 완벽히 치환하여 구현함으로써, 하드웨어 성능 저하 없이 최적의 매칭 결과를 도출하도록 프로그램 로직을 설계했습니다.
