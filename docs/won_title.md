@@ -385,3 +385,76 @@ Node ↓ Master ↓ Task 분배 ↓ 결과 수집
 
 * **근본 논문:** *A Data-Driven Game Object System* (Scott Bilas, 2002 GDC 발표)
 * **활용 포인트:** Unity 엔진의 핵심인 컴포넌트 기반 아키텍처(ECS: Entity Component System)를 다루는 기념비적 발표 자료입니다. 자바 상속의 한계를 극복하고, 객체(Entity)에 기능(Component)을 조립하는 혁신적인 클래스 설계를 배울 수 있습니다.
+
+#### 21. Java 기반 검색엔진 및 텍스트 파싱 분석 시스템 ⭐⭐⭐⭐⭐
+
+> 교수님의 '국어 파괴 현상 번역 기술' 연구를 오마주한 역색인 기반 로컬 검색엔진
+
+**[구현]**
+
+* Crawler (웹 문서/텍스트 수집)
+* Tokenizer / Parser (기호 분리 및 형태소 단위 파싱)
+* Stopword (불용어 제거)
+* Inverted Index (역색인) 저장
+* TF-IDF 알고리즘
+* REST API 기반 검색 인터페이스
+
+**[예시]**
+
+```java
+SearchEngine engine = new SearchEngine();
+// 교수님 연구를 오마주한 형태소 분석 및 토큰화 로직
+engine.addDocument("뜨아.. 여기 모이삼 저 영화 좀 흠좀무인듯 ㅋㅋ"); 
+engine.buildInvertedIndex();
+
+List<SearchResult> results = engine.search("영화 흠좀무");
+for (SearchResult result : results) {
+    System.out.println("문서 ID: " + result.getDocId() + ", 스코어: " + result.getScore());
+}
+```
+
+**[보너스]**
+
+* PageRank를 응용한 문서 중요도 랭킹 산출
+
+**[📄 관련 논문 및 연구]**
+
+* **근본 논문:** *인터넷 매체 언어의 국어 파괴 현상의 고찰을 통한 표준어 자동 번역 기술에 대한 연구* (박장혁, 정재훈 등, 2016), *The Anatomy of a Large-Scale Hypertextual Web Search Engine* (Brin & Page, 1998)
+* **활용 포인트:** 교수님이 과거 Java를 사용하여 문장을 이모티콘/기호 등으로 분리하고 형태소 태깅(Parsing)을 거쳐 REST API 형태로 서비스한 연구 로직을 검색엔진의 Tokenizer/Parser 설계에 완벽하게 오마주할 수 있습니다. '문장 입력 -> 토큰화 -> 불용어 제거 -> 역색인 저장 -> TF-IDF 계산'으로 이어지는 데이터 파이프라인을 **Activity 다이어그램**으로, Crawler, Parser, Indexer 등의 객체 역할 분담을 **Class 다이어그램**으로 명확히 도출하기 좋습니다.
+
+--------------------------------------------------------------------------------
+
+#### 22. Java 분산 컴퓨팅 프레임워크 기반 노드 모니터링 시스템 ⭐⭐⭐⭐⭐
+
+> 교수님의 네트워크/통신 시스템 전공을 저격하는 소켓 통신 기반 클라이언트-서버 아키텍처
+
+**[구현]**
+
+* Socket Programming (TCP/IP)
+* Master Node (서버, Task 분배 및 상태 관리)
+* Worker Node (클라이언트/JVM, 데이터 수집 및 작업 수행)
+* MapReduce (작업 분산 및 결과 수집)
+* Thread Pool 관리
+* 분산 노드 상태 동기화
+
+**[예시]**
+
+```java
+MasterNode master = new MasterNode(8080);
+master.start();
+
+WorkerNode worker1 = new WorkerNode("127.0.0.1", 8080);
+worker1.connect(); // Wi-Fi 및 소켓 통신을 이용한 노드 연결
+
+Task task = new MapReduceTask(data);
+master.dispatchTask(worker1, task); // Task 분배
+```
+
+**[보너스]**
+
+* Worker 노드의 상태 데이터 실시간 수집 및 모니터링 대시보드
+
+**[📄 관련 논문 및 연구]**
+
+* **근본 논문:** *차량네트워크와 Wi-Fi통신을 이용한 안드로이드 차량관리 시스템 구현* (정재훈 등, 2013), ITIL 기반 클라우드-클라이언트 시스템 구조도
+* **활용 포인트:** '정보통신시스템'을 전공하시고, Wi-Fi 통신 시스템 및 Cloud-Client 기반 업무 시스템 등 클라이언트-서버 구조 설계에 능통하신 교수님의 관심사를 완벽히 반영합니다. Master 노드와 Worker 노드 간의 네트워크 토폴로지를 화려한 **시스템 구조도(System Architecture)**로 뽑아낼 수 있으며, Master가 Task를 분배하고 Worker가 결과를 수집하여 반환하는 과정을 **Sequence 다이어그램**으로 명확히 증명할 수 있습니다.
