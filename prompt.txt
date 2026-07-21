@@ -1,0 +1,1014 @@
+package com.melkie.data;
+
+import com.melkie.model.GameConfig;
+import com.melkie.model.GameData;
+import com.melkie.model.Persona;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * personas.json 파일을 읽어 SimpleJsonParser로 파싱한 뒤,
+ * 제네릭 트리(Map/List/Double/String)를 타입 안전한 Persona / GameConfig 객체로 변환한다.
+ * Jackson/Gson 등 외부 매핑 라이브러리 없이 순수 자바 반복문으로 직접 매핑한다.
+ */
+public final class PersonaRepository {
+
+    private PersonaRepository() {}
+
+    public static GameData loadFromPath(String path) throws IOException {
+        String json = new String(Files.readAllBytes(Path.of(path)), StandardCharsets.UTF_8);
+        return parse(json);
+    }
+
+    public static GameData loadFromClasspath(String resourceName) throws IOException {
+        try (InputStream is = PersonaRepository.class.getClassLoader().getResourceAsStream(resourceName)) {
+            if (is == null) {
+                throw new IOException("클래스패스에서 리소스를 찾을 수 없습니다: " + resourceName);
+            }
+            byte[] bytes = is.readAllBytes();
+            return parse(new String(bytes, StandardCharsets.UTF_8));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static GameData parse(String json) {
+        Map<String, Object> root = SimpleJsonParser.parseObjectRoot(json);
+
+        Map<String, Integer> globalPositive = toIntMap((Map<String, Object>) root.get("globalPositiveKeywords"));
+        Map<String, Integer> globalNegative = toIntMap((Map<String, Object>) root.get("globalNegativeKeywords"));
+        Map<String, Integer> dominanceWords = toIntMap((Map<String, Object>) root.get("dominanceWords"));
+        Map<String, Integer> submissionWords = toIntMap((Map<String, Object>) root.get("submissionWords"));
+        Map<String, Integer> assertiveWords = toIntMap((Map<String, Object>) root.get("assertiveWords"));
+
+        Map<String, Object> prefixesRaw = (Map<String, Object>) root.get("prefixes");
+        Map<String, List<String>> prefixes = new LinkedHashMap<>();
+        if (prefixesRaw != null) {
+            for (Map.Entry<String, Object> e : prefixesRaw.entrySet()) {
+                prefixes.put(e.getKey(), toStringList((List<Object>) e.getValue()));
+            }
+        }
+
+        GameConfig config = new GameConfig(globalPositive, globalNegative, dominanceWords,
+                submissionWords, assertiveWords, prefixes);
+
+        List<Object> personasRaw = (List<Object>) root.get("personas");
+        List<Persona> personas = new ArrayList<>();
+        if (personasRaw != null) {
+            for (Object personaObj : personasRaw) {
+                personas.add(toPersona((Map<String, Object>) personaObj));
+            }
+        }
+
+        return new GameData(personas, config);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Persona toPersona(Map<String, Object> map) {
+        int id = ((Double) map.get("id")).intValue();
+        String name = (String) map.get("name");
+        int age = ((Double) map.get("age")).intValue();
+        String mbti = (String) map.get("mbti");
+        String gender = (String) map.get("gender");
+        String tagline = (String) map.get("tagline");
+
+        List<Object> targetVectorRaw = (List<Object>) map.get("targetVector");
+        double[] targetVector = new double[targetVectorRaw.size()];
+        for (int i = 0; i < targetVectorRaw.size(); i++) {
+            targetVector[i] = ((Double) targetVectorRaw.get(i)).doubleValue();
+        }
+
+        Map<String, Integer> loveKeywords = toIntMap((Map<String, Object>) map.get("loveKeywords"));
+        Map<String, Integer> hateKeywords = toIntMap((Map<String, Object>) map.get("hateKeywords"));
+
+        Map<String, Object> dialoguesRaw = (Map<String, Object>) map.get("dialogues");
+        Map<String, List<String>> dialogues = new LinkedHashMap<>();
+        if (dialoguesRaw != null) {
+            for (Map.Entry<String, Object> e : dialoguesRaw.entrySet()) {
+                dialogues.put(e.getKey(), toStringList((List<Object>) e.getValue()));
+            }
+        }
+
+        return new Persona(id, name, age, mbti, gender, tagline, targetVector,
+                loveKeywords, hateKeywords, dialogues);
+    }
+
+    private static Map<String, Integer> toIntMap(Map<String, Object> raw) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+        if (raw == null) {
+            return result;
+        }
+        for (Map.Entry<String, Object> e : raw.entrySet()) {
+            result.put(e.getKey(), ((Double) e.getValue()).intValue());
+        }
+        return result;
+    }
+
+    private static List<String> toStringList(List<Object> raw) {
+        List<String> result = new ArrayList<>();
+        if (raw == null) {
+            return result;
+        }
+        for (Object o : raw) {
+            result.add((String) o);
+        }
+        return result;
+    }
+}
+
+package com.melkie.data;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * MelKie 프로젝트의 "제로 의존성" 철학에 따라 외부 JSON 라이브러리(Gson, Jackson 등)를
+ * 전혀 사용하지 않고, 순수 Java SE 표준 API만으로 직접 구현한 재귀 하강(Recursive Descent)
+ * JSON 파서입니다.
+ *
+ * 반환 타입 매핑:
+ *   object -> LinkedHashMap<String, Object>
+ *   array  -> ArrayList<Object>
+ *   string -> String
+ *   number -> Double
+ *   true/false -> Boolean
+ *   null -> null
+ */
+public final class SimpleJsonParser {
+
+    private final String src;
+    private int pos;
+
+    private SimpleJsonParser(String src) {
+        this.src = src;
+        this.pos = 0;
+    }
+
+    public static Object parse(String json) {
+        SimpleJsonParser parser = new SimpleJsonParser(json);
+        parser.skipWhitespace();
+        Object result = parser.parseValue();
+        parser.skipWhitespace();
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> parseObjectRoot(String json) {
+        Object result = parse(json);
+        if (!(result instanceof Map)) {
+            throw new IllegalArgumentException("JSON 루트가 객체가 아닙니다.");
+        }
+        return (Map<String, Object>) result;
+    }
+
+    private Object parseValue() {
+        skipWhitespace();
+        if (pos >= src.length()) {
+            throw error("예기치 못한 JSON 종료");
+        }
+        char c = src.charAt(pos);
+        switch (c) {
+            case '{': return parseObject();
+            case '[': return parseArray();
+            case '"': return parseString();
+            case 't':
+            case 'f': return parseBoolean();
+            case 'n': return parseNull();
+            default: return parseNumber();
+        }
+    }
+
+    private Map<String, Object> parseObject() {
+        Map<String, Object> map = new LinkedHashMap<>();
+        expect('{');
+        skipWhitespace();
+        if (peek() == '}') {
+            pos++;
+            return map;
+        }
+        while (true) {
+            skipWhitespace();
+            String key = parseString();
+            skipWhitespace();
+            expect(':');
+            Object value = parseValue();
+            map.put(key, value);
+            skipWhitespace();
+            char c = peek();
+            if (c == ',') {
+                pos++;
+            } else if (c == '}') {
+                pos++;
+                break;
+            } else {
+                throw error("객체 파싱 중 ',' 또는 '}' 기대");
+            }
+        }
+        return map;
+    }
+
+    private List<Object> parseArray() {
+        List<Object> list = new ArrayList<>();
+        expect('[');
+        skipWhitespace();
+        if (peek() == ']') {
+            pos++;
+            return list;
+        }
+        while (true) {
+            Object value = parseValue();
+            list.add(value);
+            skipWhitespace();
+            char c = peek();
+            if (c == ',') {
+                pos++;
+            } else if (c == ']') {
+                pos++;
+                break;
+            } else {
+                throw error("배열 파싱 중 ',' 또는 ']' 기대");
+            }
+        }
+        return list;
+    }
+
+    private String parseString() {
+        expect('"');
+        StringBuilder sb = new StringBuilder();
+        while (true) {
+            if (pos >= src.length()) {
+                throw error("문자열이 닫히지 않았습니다.");
+            }
+            char c = src.charAt(pos++);
+            if (c == '"') {
+                break;
+            }
+            if (c == '\\') {
+                char esc = src.charAt(pos++);
+                switch (esc) {
+                    case '"': sb.append('"'); break;
+                    case '\\': sb.append('\\'); break;
+                    case '/': sb.append('/'); break;
+                    case 'b': sb.append('\b'); break;
+                    case 'f': sb.append('\f'); break;
+                    case 'n': sb.append('\n'); break;
+                    case 'r': sb.append('\r'); break;
+                    case 't': sb.append('\t'); break;
+                    case 'u':
+                        String hex = src.substring(pos, pos + 4);
+                        sb.append((char) Integer.parseInt(hex, 16));
+                        pos += 4;
+                        break;
+                    default:
+                        throw error("알 수 없는 escape 문자: \\" + esc);
+                }
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private Double parseNumber() {
+        int start = pos;
+        if (peek() == '-') pos++;
+        while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
+        if (pos < src.length() && src.charAt(pos) == '.') {
+            pos++;
+            while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
+        }
+        if (pos < src.length() && (src.charAt(pos) == 'e' || src.charAt(pos) == 'E')) {
+            pos++;
+            if (pos < src.length() && (src.charAt(pos) == '+' || src.charAt(pos) == '-')) pos++;
+            while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
+        }
+        String numStr = src.substring(start, pos);
+        if (numStr.isEmpty()) {
+            throw error("숫자 파싱 실패");
+        }
+        return Double.parseDouble(numStr);
+    }
+
+    private Boolean parseBoolean() {
+        if (src.startsWith("true", pos)) {
+            pos += 4;
+            return Boolean.TRUE;
+        } else if (src.startsWith("false", pos)) {
+            pos += 5;
+            return Boolean.FALSE;
+        }
+        throw error("boolean 파싱 실패");
+    }
+
+    private Object parseNull() {
+        if (src.startsWith("null", pos)) {
+            pos += 4;
+            return null;
+        }
+        throw error("null 파싱 실패");
+    }
+
+    private void expect(char expected) {
+        skipWhitespace();
+        if (pos >= src.length() || src.charAt(pos) != expected) {
+            throw error("'" + expected + "' 문자를 기대했습니다.");
+        }
+        pos++;
+    }
+
+    private char peek() {
+        skipWhitespace();
+        if (pos >= src.length()) {
+            throw error("예기치 못한 JSON 종료");
+        }
+        return src.charAt(pos);
+    }
+
+    private void skipWhitespace() {
+        while (pos < src.length() && Character.isWhitespace(src.charAt(pos))) {
+            pos++;
+        }
+    }
+
+    private RuntimeException error(String msg) {
+        int lineStart = Math.max(0, pos - 20);
+        int lineEnd = Math.min(src.length(), pos + 20);
+        String context = src.substring(lineStart, lineEnd);
+        return new IllegalArgumentException("JSON 파싱 오류(위치 " + pos + "): " + msg + " ... 주변: " + context);
+    }
+}
+
+package com.melkie.engine;
+
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * TextAnalysisEngine 한 번의 분석 결과를 담는 불변(immutable) 값 객체.
+ */
+public final class AnalysisResult {
+
+    private final int tensionDelta;
+    private final double dominanceDelta;
+    private final double submissionDelta;
+    private final double assertivenessDelta;
+    private final List<String> matchedKeywords;
+
+    public AnalysisResult(int tensionDelta, double dominanceDelta, double submissionDelta,
+                           double assertivenessDelta, List<String> matchedKeywords) {
+        this.tensionDelta = tensionDelta;
+        this.dominanceDelta = dominanceDelta;
+        this.submissionDelta = submissionDelta;
+        this.assertivenessDelta = assertivenessDelta;
+        this.matchedKeywords = Collections.unmodifiableList(matchedKeywords);
+    }
+
+    public int getTensionDelta() { return tensionDelta; }
+    public double getDominanceDelta() { return dominanceDelta; }
+    public double getSubmissionDelta() { return submissionDelta; }
+    public double getAssertivenessDelta() { return assertivenessDelta; }
+    public List<String> getMatchedKeywords() { return matchedKeywords; }
+}
+
+package com.melkie.engine;
+
+/**
+ * 무거운 머신러닝 연산 없이, 순수 자바 반복문과 Math.pow / Math.sqrt 만으로
+ * 코사인 유사도(Cosine Similarity)를 구현한 수학적 매칭 엔진.
+ *
+ *              sum(Ai * Bi)
+ * similarity = ------------------------------
+ *              sqrt(sum(Ai^2)) * sqrt(sum(Bi^2))
+ */
+public final class MatchEngine {
+
+    private MatchEngine() {}
+
+    /** 두 벡터의 코사인 유사도를 0.0 ~ 1.0 사이 값으로 반환한다. */
+    public static double cosineSimilarity(double[] a, double[] b) {
+        if (a.length != b.length) {
+            throw new IllegalArgumentException("벡터 차원이 일치하지 않습니다.");
+        }
+
+        double dotProduct = 0.0;
+        double magnitudeA = 0.0;
+        double magnitudeB = 0.0;
+
+        for (int i = 0; i < a.length; i++) {
+            dotProduct += a[i] * b[i];
+            magnitudeA += Math.pow(a[i], 2);
+            magnitudeB += Math.pow(b[i], 2);
+        }
+
+        double denominator = Math.sqrt(magnitudeA) * Math.sqrt(magnitudeB);
+        if (denominator == 0.0) {
+            return 0.0;
+        }
+        return dotProduct / denominator;
+    }
+
+    /** 싱크로율(%) 형태로 변환. 사용자가 대화 중 아무 신호도 주지 않았다면 기본 벡터로 보정한다. */
+    public static double similarityPercent(double[] userVector, double[] targetVector) {
+        double[] safeUserVector = isZeroVector(userVector)
+                ? new double[]{10, 10, 10}
+                : userVector;
+        double raw = cosineSimilarity(safeUserVector, targetVector);
+        // 음수 유사도는 0%로, 그 외에는 백분율로 스케일링
+        return Math.max(0.0, raw) * 100.0;
+    }
+
+    private static boolean isZeroVector(double[] v) {
+        for (double x : v) {
+            if (x != 0.0) return false;
+        }
+        return true;
+    }
+}
+package com.melkie.engine;
+
+import com.melkie.model.Persona;
+import com.melkie.state.ChillyState;
+import com.melkie.state.MeltingState;
+
+/**
+ * 한 명의 페르소나와의 1:1 채팅 세션을 통제하는 컨텍스트(Context) 클래스.
+ * 상태 패턴(State Pattern)의 Context 역할을 수행하며, 텐션 점수와 유저의
+ * 3차원 성향 벡터[주도성, 순종성, 적극성]를 누적 관리한다.
+ */
+public class MeltingContext {
+
+    private final Persona persona;
+    private MeltingState state = ChillyState.INSTANCE;
+    private int tension = 0;
+    private final double[] userVector = new double[3]; // [주도성, 순종성, 적극성]
+    private int lastDelta = 0;
+
+    public MeltingContext(Persona persona) {
+        this.persona = persona;
+    }
+
+    public Persona getPersona() { return persona; }
+    public MeltingState getState() { return state; }
+    public int getTension() { return tension; }
+    public double[] getUserVector() { return userVector; }
+    public int getLastDelta() { return lastDelta; }
+
+    /** 분석 결과를 세션에 반영하고, 다형성을 통해 상태 전이를 평가한다. */
+    public void applyResult(AnalysisResult result) {
+        this.lastDelta = result.getTensionDelta();
+        this.tension = clamp(this.tension + result.getTensionDelta(), 0, 100);
+
+        userVector[0] += result.getDominanceDelta();
+        userVector[1] += result.getSubmissionDelta();
+        userVector[2] += result.getAssertivenessDelta();
+
+        // 다형성에 의한 상태 전이 평가 (if-else 없이 각 상태 객체가 스스로 판단)
+        this.state = state.evaluateTransition(tension);
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+}
+
+package com.melkie.engine;
+
+import com.melkie.model.GameConfig;
+import com.melkie.model.Persona;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * NLP-Free 룰 베이스 텍스트 분석 엔진.
+ * 외부 LLM/형태소 분석기 없이, java.util.regex(Pattern/Matcher)와 HashMap 어휘 사전만으로
+ * 사용자의 대사 문자열을 분석하여 텐션 점수(Melt Rate)와 3차원 성향 벡터 증분을 산출한다.
+ *
+ * 우선순위 규칙:
+ *   1) 페르소나 전용 loveKeywords / hateKeywords 가 먼저 매칭되면 그 값으로 확정(override).
+ *   2) 전역(global) 긍정/부정 사전은 페르소나 전용 사전에서 이미 처리된 어간은 건너뛴다.
+ *   3) 3차원 성향(주도성/순종성/적극성) 사전은 페르소나와 무관하게 독립적으로 항상 적용된다.
+ */
+public class TextAnalysisEngine {
+
+    private final GameConfig config;
+
+    public TextAnalysisEngine(GameConfig config) {
+        this.config = config;
+    }
+
+    public AnalysisResult analyze(String input, Persona persona) {
+        if (input == null) {
+            input = "";
+        }
+        int tension = 0;
+        List<String> matched = new ArrayList<>();
+        Set<String> resolvedStems = new HashSet<>();
+
+        // 1) 페르소나 전용 사전(우선순위 최상위) - 이 페르소나를 설레게/식게 하는 키워드
+        tension += scoreDictionary(input, persona.getLoveKeywords(), resolvedStems, matched);
+        tension += scoreDictionary(input, persona.getHateKeywords(), resolvedStems, matched);
+
+        // 2) 전역 공통 사전 (이미 페르소나 사전에서 처리된 어간은 override 되어 건너뜀)
+        tension += scoreDictionary(input, config.getGlobalPositiveKeywords(), resolvedStems, matched);
+        tension += scoreDictionary(input, config.getGlobalNegativeKeywords(), resolvedStems, matched);
+
+        // 3) 3차원 성향 벡터 - Stream API를 활용해 매칭된 가중치의 합을 계산
+        double dominance = sumMatchedWeights(input, config.getDominanceWords());
+        double submission = sumMatchedWeights(input, config.getSubmissionWords());
+        double assertiveness = sumMatchedWeights(input, config.getAssertiveWords());
+
+        return new AnalysisResult(tension, dominance, submission, assertiveness, matched);
+    }
+
+    /** 사전(dictionary)에서 매칭되는 어간을 찾아 점수를 합산하고, 매칭된 어간은 resolvedStems 에 등록한다. */
+    private int scoreDictionary(String input, Map<String, Integer> dictionary,
+                                 Set<String> resolvedStems, List<String> matchedOut) {
+        int total = 0;
+        for (Map.Entry<String, Integer> entry : dictionary.entrySet()) {
+            String stem = entry.getKey();
+            if (resolvedStems.contains(stem)) {
+                continue;
+            }
+            if (containsStem(input, stem)) {
+                total += entry.getValue();
+                resolvedStems.add(stem);
+                matchedOut.add(stem);
+            }
+        }
+        return total;
+    }
+
+    /** Stream API로 매칭된 가중치의 합을 구한다 (java.util.stream 활용). */
+    private double sumMatchedWeights(String input, Map<String, Integer> dictionary) {
+        final String text = input;
+        return dictionary.entrySet().stream()
+                .filter(e -> containsStem(text, e.getKey()))
+                .mapToInt(Map.Entry::getValue)
+                .sum();
+    }
+
+    /** 정규표현식(Pattern/Matcher)을 통한 어간 포함 여부 검사. 수백 가지 어미 변형도 어간 하나로 커버한다. */
+    private boolean containsStem(String input, String stem) {
+        Pattern pattern = Pattern.compile(Pattern.quote(stem));
+        Matcher matcher = pattern.matcher(input);
+        return matcher.find();
+    }
+}
+
+package com.melkie.model;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
+
+/**
+ * 전역(글로벌) 어휘 사전과 동적 접두사 풀을 담는 설정 객체.
+ * personas.json 최상단에서 로드되며, 모든 페르소나에게 공통 적용되는 기본 룰을 담는다.
+ */
+public class GameConfig {
+
+    private final Map<String, Integer> globalPositiveKeywords;
+    private final Map<String, Integer> globalNegativeKeywords;
+    private final Map<String, Integer> dominanceWords;
+    private final Map<String, Integer> submissionWords;
+    private final Map<String, Integer> assertiveWords;
+    private final Map<String, List<String>> prefixes;
+
+    public GameConfig(Map<String, Integer> globalPositiveKeywords,
+                       Map<String, Integer> globalNegativeKeywords,
+                       Map<String, Integer> dominanceWords,
+                       Map<String, Integer> submissionWords,
+                       Map<String, Integer> assertiveWords,
+                       Map<String, List<String>> prefixes) {
+        this.globalPositiveKeywords = globalPositiveKeywords;
+        this.globalNegativeKeywords = globalNegativeKeywords;
+        this.dominanceWords = dominanceWords;
+        this.submissionWords = submissionWords;
+        this.assertiveWords = assertiveWords;
+        this.prefixes = prefixes;
+    }
+
+    public Map<String, Integer> getGlobalPositiveKeywords() { return globalPositiveKeywords; }
+    public Map<String, Integer> getGlobalNegativeKeywords() { return globalNegativeKeywords; }
+    public Map<String, Integer> getDominanceWords() { return dominanceWords; }
+    public Map<String, Integer> getSubmissionWords() { return submissionWords; }
+    public Map<String, Integer> getAssertiveWords() { return assertiveWords; }
+
+    /** tensionDelta 크기에 따라 다른 접두사 풀에서 랜덤하게 하나를 뽑는다. */
+    public String randomPrefix(String tierKey, int lastDelta) {
+        String key;
+        if (lastDelta >= 15) {
+            key = "WARM";
+        } else if (lastDelta <= 0) {
+            key = "COLD";
+        } else {
+            key = tierKey;
+        }
+        List<String> pool = prefixes.get(key);
+        if (pool == null || pool.isEmpty()) {
+            pool = prefixes.get(tierKey);
+        }
+        if (pool == null || pool.isEmpty()) {
+            return "";
+        }
+        return pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
+    }
+}
+
+package com.melkie.model;
+
+import java.util.List;
+
+/** personas.json 전체를 로드한 결과를 담는 컨테이너. */
+public class GameData {
+    private final List<Persona> personas;
+    private final GameConfig config;
+
+    public GameData(List<Persona> personas, GameConfig config) {
+        this.personas = personas;
+        this.config = config;
+    }
+
+    public List<Persona> getPersonas() { return personas; }
+    public GameConfig getConfig() { return config; }
+}
+
+package com.melkie.model;
+
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
+
+/**
+ * 14인의 페르소나를 표현하는 순수 자바 도메인 객체.
+ * JSON(personas.json)으로부터 역직렬화되어 생성되며, 행동 특성 데이터를
+ * 하드코딩하지 않고 외부 설정으로 완전히 분리(관심사 분리)한다.
+ */
+public class Persona {
+
+    private final int id;
+    private final String name;
+    private final int age;
+    private final String mbti;
+    private final String gender;   // "MALE" / "FEMALE"
+    private final String tagline;
+
+    /** [주도성(Dominance), 순종성(Submission), 적극성(Assertiveness)] 목표 벡터 */
+    private final double[] targetVector;
+
+    /** 이 페르소나를 유독 설레게 하는 키워드 -> 가중치 (양수) */
+    private final Map<String, Integer> loveKeywords;
+
+    /** 이 페르소나의 호감도를 유독 떨어뜨리는 키워드 -> 가중치 (음수) */
+    private final Map<String, Integer> hateKeywords;
+
+    /** 감정 상태(CHILLY/FLIRTY/STEAMY)별 대사 목록 */
+    private final Map<String, List<String>> dialogues;
+
+    public Persona(int id, String name, int age, String mbti, String gender, String tagline,
+                   double[] targetVector,
+                   Map<String, Integer> loveKeywords,
+                   Map<String, Integer> hateKeywords,
+                   Map<String, List<String>> dialogues) {
+        this.id = id;
+        this.name = name;
+        this.age = age;
+        this.mbti = mbti;
+        this.gender = gender;
+        this.tagline = tagline;
+        this.targetVector = targetVector;
+        this.loveKeywords = loveKeywords;
+        this.hateKeywords = hateKeywords;
+        this.dialogues = dialogues;
+    }
+
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public int getAge() { return age; }
+    public String getMbti() { return mbti; }
+    public String getGender() { return gender; }
+    public String getTagline() { return tagline; }
+    public double[] getTargetVector() { return targetVector; }
+    public Map<String, Integer> getLoveKeywords() { return loveKeywords; }
+    public Map<String, Integer> getHateKeywords() { return hateKeywords; }
+
+    /** 특정 상태(tierKey)에서 랜덤한 대사 한 줄을 뽑아 반환 (동적 텍스트 조립의 재료) */
+    public String randomLine(String tierKey) {
+        List<String> lines = dialogues.get(tierKey);
+        if (lines == null || lines.isEmpty()) {
+            return "...";
+        }
+        int idx = ThreadLocalRandom.current().nextInt(lines.size());
+        return lines.get(idx);
+    }
+
+    @Override
+    public String toString() {
+        return name + "(" + age + "/" + mbti + "/" + tagline + ")";
+    }
+}
+package com.melkie.state;
+
+/** 밀당(철벽) 단계 - 초기 상태 */
+public final class ChillyState implements MeltingState {
+
+    public static final ChillyState INSTANCE = new ChillyState();
+
+    private ChillyState() {}
+
+    @Override
+    public String tierKey() { return "CHILLY"; }
+
+    @Override
+    public String displayName() { return "밀당"; }
+
+    @Override
+    public MeltingState evaluateTransition(int tension) {
+        if (tension >= 70) {
+            return SteamyState.INSTANCE;
+        } else if (tension >= 30) {
+            return FlirtyState.INSTANCE;
+        }
+        return this;
+    }
+}
+
+package com.melkie.state;
+
+/** 능글(호감) 단계 - 텐션 30 이상 돌파 시 진입 */
+public final class FlirtyState implements MeltingState {
+
+    public static final FlirtyState INSTANCE = new FlirtyState();
+
+    private FlirtyState() {}
+
+    @Override
+    public String tierKey() { return "FLIRTY"; }
+
+    @Override
+    public String displayName() { return "능글"; }
+
+    @Override
+    public MeltingState evaluateTransition(int tension) {
+        if (tension >= 70) {
+            return SteamyState.INSTANCE;
+        }
+        return this;
+    }
+}
+
+package com.melkie.state;
+
+/**
+ * 감정 상태를 통제하는 상태 패턴(State Pattern)의 핵심 인터페이스.
+ * 밀당(Chilly) -> 능글(Flirty) -> 치명(Steamy) 로 이어지는 상태 전이를
+ * 다형성(Polymorphism)으로 완벽히 통제하여, 논리적 흐름이 끊기는 것을 원천 차단한다.
+ */
+public interface MeltingState {
+
+    /** personas.json의 dialogues 맵 키("CHILLY"/"FLIRTY"/"STEAMY")와 매핑되는 값 */
+    String tierKey();
+
+    /** 사용자에게 보여줄 한글 상태명 (예: "밀당", "능글", "치명") */
+    String displayName();
+
+    /**
+     * 누적 텐션 점수(0~100)를 바탕으로 다음 상태를 판단한다.
+     * 상태는 한 번 올라가면 내려가지 않는 단방향 전이(one-way escalation)를 따른다.
+     */
+    MeltingState evaluateTransition(int tension);
+}
+
+package com.melkie.state;
+
+/** 치명(무장해제) 단계 - 텐션 70 이상 돌파 시 진입하는 최종 상태 */
+public final class SteamyState implements MeltingState {
+
+    public static final SteamyState INSTANCE = new SteamyState();
+
+    private SteamyState() {}
+
+    @Override
+    public String tierKey() { return "STEAMY"; }
+
+    @Override
+    public String displayName() { return "치명"; }
+
+    @Override
+    public MeltingState evaluateTransition(int tension) {
+        // 최종 상태이므로 더 이상 전이하지 않는다.
+        return this;
+    }
+}
+
+package com.melkie.ui;
+
+import com.melkie.engine.AnalysisResult;
+import com.melkie.engine.MatchEngine;
+import com.melkie.engine.MeltingContext;
+import com.melkie.engine.TextAnalysisEngine;
+import com.melkie.model.GameData;
+import com.melkie.model.Persona;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.Scanner;
+
+/**
+ * 무거운 그래픽 렌더링 없이, 순수 Scanner + System.out.println 만으로 구동되는
+ * CUI(Command-line User Interface). 틴더 스타일 탐색(L: Next / R: Match) 후,
+ * 매칭된 페르소나와 3턴의 1:1 채팅을 진행하고 코사인 유사도로 싱크로율을 산출한다.
+ */
+public class ConsoleUI {
+
+    private static final int TOTAL_TURNS = 3;
+
+    private final GameData gameData;
+    private final Scanner scanner;
+    private final TextAnalysisEngine engine;
+
+    public ConsoleUI(GameData gameData, Scanner scanner) {
+        this.gameData = gameData;
+        this.scanner = scanner;
+        this.engine = new TextAnalysisEngine(gameData.getConfig());
+    }
+
+    public void run() {
+        printBanner();
+
+        List<Persona> personas = gameData.getPersonas();
+        int index = 0;
+
+        while (index < personas.size()) {
+            Persona persona = personas.get(index);
+            printPersonaCard(persona, index + 1, personas.size());
+            System.out.print("[L: 다음(Next) / R: 매칭(Match) / Q: 종료(Quit)] > ");
+
+            String input = safeNextLine().trim().toUpperCase(Locale.ROOT);
+            if (input.equals("Q")) {
+                break;
+            } else if (input.equals("R")) {
+                startChat(persona);
+                index++;
+            } else {
+                System.out.println("[시스템] " + persona.getName() + "님을 넘겼습니다.\n");
+                index++;
+            }
+        }
+
+        System.out.println("\n[시스템] MelKie를 종료합니다. 좋은 인연 되세요!");
+    }
+
+    private void printBanner() {
+        System.out.println("==================================================");
+        System.out.println("   MelKie (멜키) - 순수 자바 코어 엔진 페르소나 매칭 시뮬레이터");
+        System.out.println("==================================================");
+        System.out.println("총 " + gameData.getPersonas().size() + "인의 페르소나가 당신을 기다리고 있습니다.\n");
+    }
+
+    private void printPersonaCard(Persona persona, int order, int total) {
+        System.out.println("--------------------------------------------------");
+        System.out.println("[" + order + "/" + total + "] " + persona.getName()
+                + " (" + persona.getAge() + "세 / " + persona.getMbti() + ")");
+        System.out.println("     " + persona.getTagline());
+        System.out.println("--------------------------------------------------");
+    }
+
+    private void startChat(Persona persona) {
+        MeltingContext ctx = new MeltingContext(persona);
+        System.out.println();
+        System.out.println("[시스템] '" + persona.getName() + "'와의 1:1 채팅방이 열렸습니다. (현재 텐션: 0)");
+
+        for (int turn = 1; turn <= TOTAL_TURNS; turn++) {
+            speak(ctx, persona);
+
+            System.out.print("[유저 입력] > ");
+            String userInput = safeNextLine();
+
+            AnalysisResult result = engine.analyze(userInput, persona);
+            ctx.applyResult(result);
+
+            String sign = result.getTensionDelta() >= 0 ? "+" : "";
+            System.out.println("(내부 엔진 연산: 키워드 " + result.getMatchedKeywords()
+                    + " -> 텐션 " + sign + result.getTensionDelta()
+                    + " -> 누적 텐션 " + ctx.getTension() + ")");
+
+            if (turn < TOTAL_TURNS) {
+                System.out.println();
+            }
+        }
+
+        // 마지막 반응 한 번 더 출력 (최종 상태의 대사로 대화 마무리)
+        System.out.println();
+        speak(ctx, persona);
+
+        System.out.println("\n[시스템] 대화 종료. 코사인 유사도 분석 중...");
+        double percent = MatchEngine.similarityPercent(ctx.getUserVector(), persona.getTargetVector());
+        System.out.printf(Locale.KOREA, "[결과] 당신과 %s의 페르소나 싱크로율은 %.1f%% 입니다!%n",
+                persona.getName(), percent);
+
+        printBestOverallMatch(ctx, persona);
+        System.out.println();
+    }
+
+    private void speak(MeltingContext ctx, Persona persona) {
+        String tierKey = ctx.getState().tierKey();
+        String prefix = gameData.getConfig().randomPrefix(tierKey, ctx.getLastDelta());
+        String line = persona.randomLine(tierKey);
+        String prefixPart = prefix.isEmpty() ? "" : "(" + prefix + ") ";
+        System.out.println("[" + persona.getName() + "(" + ctx.getState().displayName() + ")]: "
+                + prefixPart + line);
+    }
+
+    private void printBestOverallMatch(MeltingContext ctx, Persona current) {
+        Persona best = null;
+        double bestPercent = -1.0;
+        for (Persona candidate : gameData.getPersonas()) {
+            double pct = MatchEngine.similarityPercent(ctx.getUserVector(), candidate.getTargetVector());
+            if (pct > bestPercent) {
+                bestPercent = pct;
+                best = candidate;
+            }
+        }
+        if (best != null && best != current) {
+            System.out.printf(Locale.KOREA, "[참고] 전체 %d인 중 당신의 성향과 가장 잘 맞는 페르소나는 %s (%.1f%%) 입니다.%n",
+                    gameData.getPersonas().size(), best.getName(), bestPercent);
+        }
+    }
+
+    private String safeNextLine() {
+        if (scanner.hasNextLine()) {
+            return scanner.nextLine();
+        }
+        return "";
+    }
+}
+
+package com.melkie;
+
+import com.melkie.data.PersonaRepository;
+import com.melkie.model.GameData;
+import com.melkie.ui.ConsoleUI;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Scanner;
+
+/**
+ * MelKie (멜키) - 순수 자바 코어 엔진 기반 페르소나 매칭 시뮬레이터
+ * 엔트리 포인트.
+ *
+ * 실행 방법 (프로젝트 루트 기준):
+ *   javac -encoding UTF-8 -d bin $(find src -name "*.java")
+ *   java -Dfile.encoding=UTF-8 -cp bin com.melkie.Main resources/personas.json
+ *
+ * 인자를 주지 않으면 기본 경로 "resources/personas.json" 을 사용한다.
+ */
+public class Main {
+
+    public static void main(String[] args) {
+        // 콘솔 한글 깨짐 방지: 표준 입출력을 UTF-8로 강제 고정
+        System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
+
+        String jsonPath = args.length > 0 ? args[0] : "resources/personas.json";
+
+        GameData gameData;
+        try {
+            gameData = PersonaRepository.loadFromPath(jsonPath);
+        } catch (IOException e) {
+            System.err.println("[오류] personas.json 로드에 실패했습니다: " + jsonPath);
+            System.err.println("       실행 위치(프로젝트 루트)를 확인하거나, 경로를 인자로 전달하세요.");
+            System.err.println("       예) java -cp bin com.melkie.Main /path/to/personas.json");
+            return;
+        }
+
+        if (gameData.getPersonas().isEmpty()) {
+            System.err.println("[오류] 로드된 페르소나가 없습니다. personas.json 내용을 확인하세요.");
+            return;
+        }
+
+        try (Scanner scanner = new Scanner(System.in, StandardCharsets.UTF_8)) {
+            new ConsoleUI(gameData, scanner).run();
+        }
+    }
+}
+
+이런식으로 프로젝트를 구현해봤어. 근데 여기서 3번동안 대화를 하는건 너무 적다는 피드백을 받아서 7번으로 늘리려고해.
+그리고 프로그램 시작 시 여자 / 남자 를 고르고, 상대와 대화할 때 이름 옆에 (여), (남) 이런식으로 성별 표시도 되면 좋겠데. 도와줘.
