@@ -1,5 +1,6 @@
 package com.melkie.data;
 
+import com.melkie.model.Gender;
 import com.melkie.model.GameConfig;
 import com.melkie.model.GameData;
 import com.melkie.model.Persona;
@@ -76,7 +77,7 @@ public final class PersonaRepository {
         String name = (String) map.get("name");
         int age = ((Double) map.get("age")).intValue();
         String mbti = (String) map.get("mbti");
-        String gender = (String) map.get("gender");
+        Gender gender = Gender.fromJsonValue((String) map.get("gender"));
         String tagline = (String) map.get("tagline");
 
         List<Object> targetVectorRaw = (List<Object>) map.get("targetVector");

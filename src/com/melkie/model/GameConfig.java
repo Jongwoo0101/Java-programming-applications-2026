@@ -10,6 +10,12 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class GameConfig {
 
+    /** 직전 텐션 변화량이 이 값 이상이면 "warm(설렘)" 접두사 풀을 사용한다. */
+    private static final int WARM_DELTA_THRESHOLD = 15;
+
+    /** 직전 텐션 변화량이 이 값 이하면 "cold(식음)" 접두사 풀을 사용한다. */
+    private static final int COLD_DELTA_THRESHOLD = 0;
+
     private final Map<String, Integer> globalPositiveKeywords;
     private final Map<String, Integer> globalNegativeKeywords;
     private final Map<String, Integer> dominanceWords;
@@ -40,9 +46,9 @@ public class GameConfig {
     /** tensionDelta 크기에 따라 다른 접두사 풀에서 랜덤하게 하나를 뽑는다. */
     public String randomPrefix(String tierKey, int lastDelta) {
         String key;
-        if (lastDelta >= 15) {
+        if (lastDelta >= WARM_DELTA_THRESHOLD) {
             key = "WARM";
-        } else if (lastDelta <= 0) {
+        } else if (lastDelta <= COLD_DELTA_THRESHOLD) {
             key = "COLD";
         } else {
             key = tierKey;
