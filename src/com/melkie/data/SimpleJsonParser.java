@@ -20,8 +20,8 @@ import java.util.Map;
  */
 public final class SimpleJsonParser {
 
-    private final String src;
-    private int pos;
+    private final String src; // 파싱할 원본 JSON 문자열
+    private int pos; // 현재 읽고 있는 문자 위치(커서). 파싱이 진행될수록 계속 증가
 
     private SimpleJsonParser(String src) {
         this.src = src;

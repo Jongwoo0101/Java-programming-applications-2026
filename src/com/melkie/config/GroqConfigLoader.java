@@ -20,6 +20,10 @@ public final class GroqConfigLoader {
 
     private GroqConfigLoader() {}
 
+    /**
+     * System.getenv("GROQ API KEY")로 환경변수를 먼저 확인.
+     * 만약 있다면 그 값을 반환
+     */
     public static String loadApiKey() {
         String fromEnv = System.getenv(ENV_API_KEY);
         if (fromEnv != null && !fromEnv.isBlank()) {
