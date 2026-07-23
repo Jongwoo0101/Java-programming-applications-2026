@@ -19,6 +19,10 @@ import java.util.Map;
  * personas.json 파일을 읽어 SimpleJsonParser로 파싱한 뒤,
  * 제네릭 트리(Map/List/Double/String)를 타입 안전한 Persona / GameConfig 객체로 변환한다.
  * Jackson/Gson 등 외부 매핑 라이브러리 없이 순수 자바 반복문으로 직접 매핑한다.
+ *
+ * 참고: dialogues 필드는 Gemini 연동 이후에도 JSON에 그대로 남겨둔다.
+ * API 키가 없거나 네트워크 오류로 Gemini 호출이 실패할 때 쓰이는 폴백(fallback) 대사로
+ * 활용되므로, 게임이 절대 "먹통"이 되지 않도록 안전망 역할을 한다.
  */
 public final class PersonaRepository {
 
@@ -80,10 +84,14 @@ public final class PersonaRepository {
         Gender gender = Gender.fromJsonValue((String) map.get("gender"));
         String tagline = (String) map.get("tagline");
 
+        // JSON 데이터의 크기와 무관하게 targetVector를 3차원으로 강제 고정하여 에러 방지
         List<Object> targetVectorRaw = (List<Object>) map.get("targetVector");
-        double[] targetVector = new double[targetVectorRaw.size()];
-        for (int i = 0; i < targetVectorRaw.size(); i++) {
-            targetVector[i] = ((Double) targetVectorRaw.get(i)).doubleValue();
+        double[] targetVector = new double[3];
+        if (targetVectorRaw != null) {
+            int limit = Math.min(3, targetVectorRaw.size());
+            for (int i = 0; i < limit; i++) {
+                targetVector[i] = ((Double) targetVectorRaw.get(i)).doubleValue();
+            }
         }
 
         Map<String, Integer> loveKeywords = toIntMap((Map<String, Object>) map.get("loveKeywords"));
