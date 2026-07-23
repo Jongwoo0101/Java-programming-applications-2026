@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * 페르소나 탐색(틴더 스타일 브라우징) 유스케이스를 담당하는 서비스.
+ * 페르소나 탐색 유스케이스를 담당하는 서비스.
  * 콘솔 입출력(Scanner/System.out)에 전혀 의존하지 않는 순수 로직이므로,
  * 추후 GUI/웹 등 다른 UI로 교체되더라도 이 클래스는 그대로 재사용할 수 있다.
  */

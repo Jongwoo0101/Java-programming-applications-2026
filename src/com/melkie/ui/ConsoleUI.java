@@ -3,7 +3,6 @@ package com.melkie.ui;
 import com.melkie.engine.AnalysisResult;
 import com.melkie.engine.MeltingContext;
 import com.melkie.model.Gender;
-import com.melkie.model.GameConfig;
 import com.melkie.model.GameData;
 import com.melkie.model.Persona;
 import com.melkie.service.ChatBranchChoice;
@@ -11,6 +10,8 @@ import com.melkie.service.ChatSessionService;
 import com.melkie.service.MatchReport;
 import com.melkie.service.PersonaBrowseService;
 
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -21,11 +22,19 @@ import java.util.Scanner;
  * CUI(Command-line User Interface) 프레젠테이션 계층.
  *
  * 이 클래스의 책임은 오직 "입력을 읽고 출력을 그리는 것"뿐이다.
- * 텐션 계산, 상태 전이, 코사인 유사도 같은 비즈니스 로직은 전혀 알지 못하며,
+ * 텐션 계산, 상태 전이, 코사인 유사도, LLM 호출 같은 로직은 전혀 알지 못하며,
  * 전부 {@link ChatSessionService} / {@link PersonaBrowseService}에 위임한다.
  *
+ * [변경사항]
+ * 1) 기존 "L(다음)/R(매칭)/Q(종료)" 틴더 스타일 1개씩 넘기기 방식을 폐기하고,
+ *    선택한 성별에 맞는 페르소나 전체를 번호 매긴 목록으로 한 번에 보여준 뒤
+ *    번호를 입력해 바로 대화를 시작하는 방식으로 변경했다.
+ * 2) 페르소나의 대사를 JSON 무작위 추출 대신 Gemini API로 실시간 생성하여
+ *    유저가 방금 한 말의 문맥에 맞는 자연스러운 답변을 받아온다.
+ * 3) 타이핑 효과와 "생각 중" 지연을 넣어 실제 메신저 대화 같은 리듬을 살렸다.
+ *
  * 전체 흐름:
- *   [성별 선택] -> [틴더 탐색: L/R/Q] -> [매칭 시 기본 {@value #INITIAL_TURNS}턴 대화]
+ *   [성별 선택] -> [번호 목록에서 상대 선택] -> [매칭 시 기본 {@value #INITIAL_TURNS}턴 대화]
  *   -> [턴 종료 시 분기: 1.결과보기 / 2.더답변하기 / 3.매칭하기]
  */
 public class ConsoleUI {
@@ -35,6 +44,12 @@ public class ConsoleUI {
 
     /** "더 답변하기"를 선택했을 때 추가되는 턴 수 */
     private static final int EXTEND_TURNS = 3;
+
+    /** 한 글자씩 출력되는 타이핑 효과 속도 (ms/글자) */
+    private static final long TYPING_DELAY_MS = 18;
+
+    /** 페르소나가 "생각하는" 것처럼 보이도록 응답 전에 주는 지연 시간 (ms) */
+    private static final long THINKING_DELAY_MS = 550;
 
     private final GameData gameData;
     private final Scanner scanner;
@@ -84,46 +99,63 @@ public class ConsoleUI {
     }
 
     // ------------------------------------------------------------
-    // 2) 틴더 스타일 탐색 루프 (L: 다음 / R: 매칭 / Q: 종료)
+    // 2) 번호 목록에서 상대 선택 (기존 L/R/Q 틴더 브라우징을 대체)
     // ------------------------------------------------------------
 
     private void browseAndMatch(List<Persona> candidates) {
-        int index = 0;
-        while (index < candidates.size()) {
-            Persona persona = candidates.get(index);
-            printPersonaCard(persona, index + 1, candidates.size());
-            System.out.print("[L: 다음(Next) / R: 매칭(Match) / Q: 종료(Quit)] > ");
+        List<Persona> remaining = new ArrayList<>(candidates);
 
-            String input = safeNextLine().trim().toUpperCase(Locale.ROOT);
-            if (input.equals("Q")) {
+        while (!remaining.isEmpty()) {
+            printPersonaList(remaining);
+            System.out.print("[대화할 상대의 번호를 입력하세요 (0: 종료)] > ");
+            String rawInput = safeNextLine().trim();
+
+            if (rawInput.equals("0") || rawInput.equalsIgnoreCase("Q")) {
                 return;
             }
-            if (input.equals("R")) {
-                boolean finalMatchConfirmed = runChatSession(persona);
-                if (finalMatchConfirmed) {
-                    System.out.println("\n[시스템] 최종 매칭이 성사되어 탐색을 종료합니다.");
-                    return;
-                }
-                index++; // "결과 보기"로 마무리되었으면 다음 상대로 계속 탐색
-            } else {
-                System.out.println("[시스템] " + persona.getName() + "님을 넘겼습니다.\n");
-                index++;
+
+            int index = parseIndexChoice(rawInput, remaining.size());
+            if (index < 0) {
+                System.out.println("[시스템] 잘못된 입력입니다. 목록에 있는 번호를 입력해주세요.\n");
+                continue;
             }
+
+            Persona persona = remaining.get(index);
+            boolean finalMatchConfirmed = runChatSession(persona);
+            if (finalMatchConfirmed) {
+                System.out.println("\n[시스템] 최종 매칭이 성사되어 탐색을 종료합니다.");
+                return;
+            }
+            System.out.println(); // "결과 보기"로 세션이 끝나면 목록을 다시 보여주고 계속 탐색
         }
     }
 
-    private void printBanner() {
-        System.out.println("==================================================");
-        System.out.println("   MelKie (멜키) - 순수 자바 코어 엔진 페르소나 매칭 시뮬레이터");
-        System.out.println("==================================================");
+    /**
+     * ex)
+     * [1] 신유나(여) (22세 / ESFP) 앙큼당돌 댄서
+     * [2] 서연(여) (24세 / ISTJ) 반전 츤데레 선배
+     * ------
+     */
+    private void printPersonaList(List<Persona> candidates) {
+        System.out.println("--------------------------------------------------");
+        for (int i = 0; i < candidates.size(); i++) {
+            Persona p = candidates.get(i);
+            System.out.printf(Locale.KOREA, "[%d] %s (%d세 / %s) %s%n",
+                    i + 1, p.displayNameWithGender(), p.getAge(), p.getMbti(), p.getTagline());
+        }
+        System.out.println("--------------------------------------------------");
     }
 
-    private void printPersonaCard(Persona persona, int order, int total) {
-        System.out.println("--------------------------------------------------");
-        System.out.println("[" + order + "/" + total + "] " + persona.displayNameWithGender()
-                + " (" + persona.getAge() + "세 / " + persona.getMbti() + ")");
-        System.out.println("     " + persona.getTagline());
-        System.out.println("--------------------------------------------------");
+    private int parseIndexChoice(String rawInput, int size) {
+        try {
+            int idx = Integer.parseInt(rawInput);
+            if (idx >= 1 && idx <= size) {
+                return idx - 1;
+            }
+        } catch (NumberFormatException ignored) {
+            // 숫자가 아니면 무효 처리
+        }
+        return -1;
     }
 
     // ------------------------------------------------------------
@@ -141,6 +173,13 @@ public class ConsoleUI {
         System.out.println();
         System.out.println("[시스템] '" + persona.displayNameWithGender()
                 + "'님과의 1:1 채팅방이 열렸습니다. (현재 텐션: 0)");
+        if (!chatSessionService.isLlmEnabled()) {
+            System.out.println("[시스템] (Gemini API 키가 설정되지 않아 기본 대사로 진행합니다. resources/gemini.properties를 확인하세요.)");
+        }
+
+        // 세션 첫 인사는 아직 유저 발화가 없으므로 JSON 폴백 대사로 시작한다.
+        printPersonaLine(persona, session.getState().displayName(),
+                chatSessionService.fallbackLine(session, persona, gameData.getConfig()));
 
         int completedTurns = 0;
         int targetTurns = INITIAL_TURNS;
@@ -173,15 +212,31 @@ public class ConsoleUI {
         int turn = fromTurn;
         while (turn < toTurn) {
             turn++;
-            speak(session, persona);
-
+            printReplyHint(persona);
             System.out.print("[유저 입력 (" + turn + "/" + toTurn + "턴)] > ");
             String userInput = safeNextLine();
 
             AnalysisResult result = chatSessionService.processTurn(session, persona, userInput);
             printEngineTrace(result, session);
+
+            sleepQuietly(THINKING_DELAY_MS);
+            String replyLine = chatSessionService.generateReply(session, persona, gameData.getConfig(), userInput);
+            printPersonaLine(persona, session.getState().displayName(), replyLine);
+
+            session.recordTurn(userInput, replyLine);
         }
         return turn;
+    }
+
+    /** 선택지 + 자율 입력 하이브리드: 참고용 화제 힌트를 살짝 보여주되, 완전히 자유롭게 입력해도 된다. */
+    private void printReplyHint(Persona persona) {
+        if (!persona.getLoveKeywords().isEmpty()) {
+            List<String> keys = new ArrayList<>(persona.getLoveKeywords().keySet());
+            int randomIndex = ThreadLocalRandom.current().nextInt(keys.size());
+            String hintWord = keys.get(randomIndex);
+
+            System.out.println("(귀띔: '" + hintWord + "' 같은 이야기를 좋아하는 것 같다...)");
+        }
     }
 
     private void printEngineTrace(AnalysisResult result, MeltingContext session) {
@@ -203,7 +258,11 @@ public class ConsoleUI {
     }
 
     private void presentResult(MeltingContext session, Persona persona) {
-        speak(session, persona); // 마지막 텐션에 맞는 대사 한 번 더 출력하고 마무리
+        sleepQuietly(THINKING_DELAY_MS);
+        String farewell = chatSessionService.generateReply(session, persona, gameData.getConfig(),
+                "(오늘 대화는 여기까지 하자면서 아쉬운 듯 짧게 인사해줘)");
+        printPersonaLine(persona, session.getState().displayName(), farewell);
+
         System.out.println("\n[시스템] 대화 종료. 코사인 유사도 분석 중...");
 
         MatchReport report = chatSessionService.buildReport(session, persona);
@@ -223,25 +282,44 @@ public class ConsoleUI {
         System.out.println("[시스템] 최종 매칭이 확정되었습니다!");
         System.out.println("==================================================");
 
-        GameConfig config = gameData.getConfig();
-        String tierKey = session.getState().tierKey();
-        String prefix = config.randomPrefix(tierKey, session.getLastDelta());
-        String prefixPart = prefix.isEmpty() ? "" : "(" + prefix + ") ";
+        sleepQuietly(THINKING_DELAY_MS);
+        String confirmationLine = chatSessionService.generateReply(session, persona, gameData.getConfig(),
+                "(방금 정식으로 매칭이 확정됐다는 소식을 듣고 기뻐하며 앞으로 잘 지내보자는 인사를 건네줘)");
+        printPersonaLine(persona, session.getState().displayName(), confirmationLine);
 
-        System.out.println("[" + persona.displayNameWithGender() + " - " + session.getState().displayName() + "]: "
-                + prefixPart + "우리 이제 진짜 시작이네. 앞으로 잘 부탁해!");
         System.out.println("[시스템] " + persona.getName() + "님과의 새로운 인연이 시작됩니다...\n");
     }
 
-    private void speak(MeltingContext session, Persona persona) {
-        GameConfig config = gameData.getConfig();
-        String tierKey = session.getState().tierKey();
-        String prefix = config.randomPrefix(tierKey, session.getLastDelta());
-        String line = persona.randomLine(tierKey);
-        String prefixPart = prefix.isEmpty() ? "" : "(" + prefix + ") ";
+    // ------------------------------------------------------------
+    // 공통 출력 유틸 (타이핑 효과 포함)
+    // ------------------------------------------------------------
 
-        System.out.println("[" + persona.displayNameWithGender() + " - " + session.getState().displayName() + "]: "
-                + prefixPart + line);
+    private void printPersonaLine(Persona persona, String tierDisplayName, String line) {
+        System.out.print("[" + persona.displayNameWithGender() + " - " + tierDisplayName + "]: ");
+        printTyping(line);
+        System.out.println();
+    }
+
+    /** 사람이 카톡을 치듯 한 글자씩 출력하는 타이핑 연출 효과. */
+    private void printTyping(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            System.out.print(text.charAt(i));
+            sleepQuietly(TYPING_DELAY_MS);
+        }
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void printBanner() {
+        System.out.println("==================================================");
+        System.out.println("   MelKie (멜키) - 페르소나 매칭 시뮬레이터");
+        System.out.println("==================================================");
     }
 
     // ------------------------------------------------------------

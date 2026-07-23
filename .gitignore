@@ -14,3 +14,4 @@ bin/
 
 # Logs
 *.log
+/resources/groq.properties

@@ -1,0 +1,48 @@
+{
+  "globalPositiveKeywords": { "고마워": 3, "좋아": 2 },
+  "globalNegativeKeywords": { "싫어": -3, "귀찮": -2 },
+  "dominanceWords": { "내가 결정": 2 },
+  "submissionWords": { "네가 골라": 2 },
+  "assertiveWords": { "가자": 1 },
+  "prefixes": {
+    "WARM": ["살짝 웃으며", "눈을 반짝이며"],
+    "COLD": ["팔짱을 끼며", "시큰둥하게"],
+    "CHILLY": ["새침하게"],
+    "FLIRTY": ["장난스럽게"],
+    "STEAMY": ["지그시 바라보며"]
+  },
+  "personas": [
+    {
+      "id": 1,
+      "name": "신유나",
+      "age": 22,
+      "mbti": "ESFP",
+      "gender": "FEMALE",
+      "tagline": "앙큼당돌 댄서",
+      "targetVector": [30, 10, 60],
+      "loveKeywords": { "춤": 5 },
+      "hateKeywords": { "지루": -5 },
+      "dialogues": {
+        "CHILLY": ["뭐야 갑자기?"],
+        "FLIRTY": ["오빠 은근 재밌네?"],
+        "STEAMY": ["...진짜 궁금해지네."]
+      }
+    },
+    {
+      "id": 2,
+      "name": "서연",
+      "age": 24,
+      "mbti": "ISTJ",
+      "gender": "FEMALE",
+      "tagline": "반전 츤데레 선배",
+      "targetVector": [50, 40, 20],
+      "loveKeywords": { "책": 5 },
+      "hateKeywords": { "무례": -5 },
+      "dialogues": {
+        "CHILLY": ["...용건만 말해."],
+        "FLIRTY": ["흥, 오늘은 좀 봐줄게."],
+        "STEAMY": ["...너한테만 이런 얘기 하는 거야."]
+      }
+    }
+  ]
+}
